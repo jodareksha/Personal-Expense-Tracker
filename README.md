@@ -5,10 +5,12 @@ A small Android app for logging expenses — add one, see the list, watch the to
 ## What it does
 
 - Add an expense with a title, amount, and category (date is stamped automatically)
-- See all expenses in a list, newest first, with a running total at the top
+- See all expenses in a list, newest first, with a running total (in RM) at the top
+- Filter the list by category, with a distinct empty-state message when a filter has zero matches
 - Delete an expense from the list
 - Data survives an app restart (Room/SQLite under the hood)
 - Handles the empty state, a loading spinner on first launch, and inline form validation
+- Smooth transitions between loading/empty/error/content, and animated insert/remove in the list
 
 ## Why I built it this way
 
@@ -28,7 +30,11 @@ I had a few real decisions to make here, so instead of just listing the tech sta
 
 **Loading/empty/error are explicit state, not inferred.** It would've been shorter to just check `if (list.isEmpty())` and call it the empty state. I didn't do that because on first launch the list starts empty *before* Room has actually loaded anything — checking size alone would flash the "no expenses" message for a split second even when data is on its way. So the UI state has `isLoading`, `errorMessage`, and the list as three separate, explicit fields.
 
-## Project structure
+**The category filter lives in the ViewModel, not as local Compose state.** It would've been quicker to just do `var selectedCategory by remember { mutableStateOf<String?>(null) }` inside the screen and filter the list there. I didn't, for the same reason validation isn't handled in the UI: the filter needs to survive configuration changes and interact with the same `combine()` pipeline that already merges the expense list and total, so it's one more `StateFlow` feeding that pipeline rather than a second, UI-owned source of truth.
+
+**Currency is hardcoded to MYR, not locale-derived.** `NumberFormat.getCurrencyInstance()` without an explicit locale follows whatever region the device is set to — which meant it silently showed EUR on my first run because that's what the emulator's locale resolved to. Since this app isn't meant to be multi-currency, I pinned the formatter to `Locale("ms", "MY")` explicitly in one place (`util/CurrencyFormat.kt`) rather than leaving it locale-dependent.
+
+
 
 ```
 app/src/main/java/com/expensetracker/app/
@@ -48,12 +54,14 @@ app/src/main/java/com/expensetracker/app/
 │   │   ├── ExpenseViewModelFactory.kt
 │   │   └── ExpenseUiState.kt
 │   └── theme/                    # colors, type, Material 3 theme
-└── util/DateFormat.kt
+└── util/
+    ├── DateFormat.kt
+    └── CurrencyFormat.kt          # pins display currency to MYR
 ```
 
 ## Testing
 
-There's a small suite of ViewModel unit tests (`app/src/test/.../ExpenseViewModelTest.kt`) covering the validation rules — blank title, non-numeric amount, zero/negative amount, and the happy path. They run against a fake in-memory repository, so no emulator or database is needed; `./gradlew test` is enough.
+There's a small suite of ViewModel unit tests (`app/src/test/.../ExpenseViewModelTest.kt`) covering the validation rules — blank title, non-numeric amount, zero/negative amount, and the happy path — plus a test that the category filter narrows the visible list without touching the overall count. They run against a fake in-memory repository, so no emulator or database is needed; `./gradlew test` is enough.
 
 I didn't add UI/instrumentation tests. Given the 4–6 hour budget, I'd rather have a few solid tests on the logic that's easy to get subtly wrong than a shallow test on a Composable that just checks a screen renders.
 
@@ -65,15 +73,21 @@ I didn't add UI/instrumentation tests. Given the 4–6 hour budget, I'd rather h
 
 If you're building from the command line instead of Android Studio, run `gradle wrapper` once inside the project to generate `gradlew`/`gradlew.bat`, since those wrapper binaries aren't checked into this repo.
 
-## What I'd add with more time
+## Optional enhancements
 
-These were left out on purpose, not forgotten — the assignment explicitly calls them optional and I'd rather ship a solid core than a half-done pile of extras:
+The assignment listed five optional items. I ended up adding two of them (categories were already part of the core build; filtering and animations were later additions once I had time to spare):
 
-- **Filtering/search** — by category or date range, once there's enough data for it to matter
-- **Edit an existing expense** — right now you can add and delete, not edit; that's a quick addition (reuse the Add screen with a pre-filled state) but I ran out of scope budget
-- **A proper category model** — categories are currently a hardcoded list of strings; a small `Category` table would let users add their own
-- **Instrumentation tests** for the Compose screens themselves
-- **A monthly summary / chart view**, since the total is already tracked at the DB level
+- **Expense categories** — done (category field + filter chips)
+- **Summary (total expenses)** — done (the total card)
+- **Filtering** — done (category filter row, with a distinct empty state for "no matches in this category" vs "no expenses at all")
+- **Simple animations** — done: list items animate in/out (`Modifier.animateItem()`), the loading/empty/error/content states crossfade instead of snapping, and the save-error banner on the Add screen eases in/out
+- **Offline-first considerations** — not really applicable here in the "sync conflict resolution" sense, since there's no remote backend at all; the app is local-only by construction, which is its own answer to "does this work offline"
+
+Not included, on purpose:
+
+- **Search** — filtering by category covers the same underlying need (narrowing the list) with far less UI, given the data model this app has. A text search box would be the natural next step if expenses grew into the hundreds.
+- **Edit an existing expense** — add/delete are covered; edit is a quick addition (reuse the Add screen with pre-filled state) but wasn't in the original core requirements and I didn't want to stretch scope further than the optional list already did.
+- **A proper category table** — categories are still a hardcoded list of strings rather than their own Room entity. Worth doing if users needed to define custom categories.
 
 ## A note on AI usage
 

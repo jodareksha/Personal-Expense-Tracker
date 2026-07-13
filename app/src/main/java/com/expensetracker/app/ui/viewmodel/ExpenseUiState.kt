@@ -7,9 +7,13 @@ data class ExpenseListUiState(
     val expenses: List<Expense> = emptyList(),
     val total: Double = 0.0,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val availableCategories: List<String> = emptyList(),
+    val selectedCategory: String? = null,
+    val totalUnfilteredCount: Int = 0
 ) {
     val isEmpty: Boolean get() = !isLoading && expenses.isEmpty() && errorMessage == null
+    val isFiltered: Boolean get() = selectedCategory != null
 }
 
 

@@ -1,5 +1,10 @@
 package com.expensetracker.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -36,6 +41,7 @@ import com.expensetracker.app.ui.viewmodel.ExpenseViewModel
 
 private val categories = listOf("General", "Food", "Transport", "Bills", "Shopping", "Health", "Other")
 
+/** Stateful wrapper: owns the ViewModel connection and the save→navigate side effect. */
 @Composable
 fun AddExpenseScreen(
     viewModel: ExpenseViewModel,
@@ -44,8 +50,6 @@ fun AddExpenseScreen(
 ) {
     val uiState by viewModel.addUiState.collectAsState()
 
-    // Navigate back automatically once the save completes successfully,
-    // then reset the form so the next visit starts clean.
     LaunchedEffect(uiState.didSaveSuccessfully) {
         if (uiState.didSaveSuccessfully) {
             onSaved()
@@ -62,7 +66,6 @@ fun AddExpenseScreen(
         onBack = onBack
     )
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,9 +139,13 @@ private fun AddExpenseContent(
                 }
             }
 
-            uiState.saveError?.let { error ->
+            AnimatedVisibility(
+                visible = uiState.saveError != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Text(
-                    text = error,
+                    text = uiState.saveError.orEmpty(),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 16.dp)

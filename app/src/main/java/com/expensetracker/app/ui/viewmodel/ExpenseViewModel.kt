@@ -16,9 +16,29 @@ import java.util.Calendar
 
 class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() {
 
+
+    private val _selectedCategory = MutableStateFlow<String?>(null)
+
+
     val listUiState: StateFlow<ExpenseListUiState> =
-        combine(repository.getAllExpenses(), repository.getTotalAmount()) { expenses, total ->
-            ExpenseListUiState(expenses = expenses, total = total, isLoading = false)
+        combine(
+            repository.getAllExpenses(),
+            repository.getTotalAmount(),
+            _selectedCategory
+        ) { allExpenses, total, selectedCategory ->
+            val filtered = if (selectedCategory == null) {
+                allExpenses
+            } else {
+                allExpenses.filter { it.category == selectedCategory }
+            }
+            ExpenseListUiState(
+                expenses = filtered,
+                total = total,
+                isLoading = false,
+                availableCategories = allExpenses.map { it.category }.distinct().sorted(),
+                selectedCategory = selectedCategory,
+                totalUnfilteredCount = allExpenses.size
+            )
         }
             .catch { throwable ->
                 emit(
@@ -33,6 +53,10 @@ class ExpenseViewModel(private val repository: ExpenseRepository) : ViewModel() 
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = ExpenseListUiState(isLoading = true)
             )
+
+    fun onCategoryFilterSelected(category: String?) {
+        _selectedCategory.value = category
+    }
 
     private val _addUiState = MutableStateFlow(AddExpenseUiState())
     val addUiState: StateFlow<AddExpenseUiState> = _addUiState
